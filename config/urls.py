@@ -5,6 +5,9 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # API endpoints
+    path('api/users/', include('users.urls', namespace='users')),
     path('api/', include('materials.urls', namespace='materials')),
 ]
 
