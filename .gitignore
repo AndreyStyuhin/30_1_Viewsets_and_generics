@@ -183,3 +183,12 @@ fabric.properties
 
 # idea folder, uncomment if you don't need it
 .idea
+
+venv/
+*.pyc
+__pycache__/
+db.sqlite3
+media/
+.env
+.idea/
+*.log
