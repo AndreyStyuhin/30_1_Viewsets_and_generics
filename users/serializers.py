@@ -1,13 +1,20 @@
 from rest_framework import serializers
-from users.models import User
+from users.models import User, Payment
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = '__all__'
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для просмотра пользователя"""
+    payments = PaymentSerializer(many=True, read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'phone', 'city', 'avatar']
+        fields = ['id', 'email', 'first_name', 'last_name', 'phone', 'city', 'avatar', 'payments']
         read_only_fields = ['id', 'email']
 
 
@@ -26,8 +33,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     """Сериализатор для редактирования профиля"""
+    payments = PaymentSerializer(many=True, read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'phone', 'city', 'avatar']
+        fields = ['id', 'email', 'first_name', 'last_name', 'phone', 'city', 'avatar', 'payments']
         read_only_fields = ['id', 'email']

@@ -23,6 +23,7 @@ INSTALLED_APPS = [
 
     # Сторонние приложения
     'rest_framework',
+    'django_filters',
 
     # Локальные приложения
     'users',
@@ -129,5 +130,9 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.JSONParser',
         'rest_framework.parsers.FormParser',
         'rest_framework.parsers.MultiPartParser',
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.OrderingFilter',
     ],
 }

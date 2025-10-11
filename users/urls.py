@@ -4,7 +4,8 @@ from users.views import (
     UserListView,
     UserRetrieveView,
     UserProfileUpdateView,
-    UserDestroyView
+    UserDestroyView,
+    PaymentListView
 )
 
 app_name = 'users'
@@ -15,4 +16,5 @@ urlpatterns = [
     path('<int:pk>/', UserRetrieveView.as_view(), name='user-detail'),
     path('<int:pk>/profile/', UserProfileUpdateView.as_view(), name='user-profile-update'),
     path('<int:pk>/delete/', UserDestroyView.as_view(), name='user-delete'),
+    path('payments/', PaymentListView.as_view(), name='payment-list'),
 ]
