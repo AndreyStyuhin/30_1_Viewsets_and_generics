@@ -1,7 +1,4 @@
 
----
-
-```markdown
 # 🎓 Django REST API — Courses & Lessons
 
 Проект представляет собой **REST API для образовательной платформы**, где реализованы модели **курсов** и **уроков**, а также кастомная модель **пользователя** с авторизацией по email.
@@ -13,7 +10,10 @@
 ```
 
 andreystyuhin-30_1_viewsets_and_generics/
+├── Dockerfile
+├── docker-compose.yml
 ├── manage.py
+├── .env.example
 ├── config/
 │   ├── settings.py
 │   ├── urls.py
@@ -24,10 +24,10 @@ andreystyuhin-30_1_viewsets_and_generics/
 │   ├── views.py
 │   └── urls.py
 └── users/            # Кастомная модель пользователя
-├── models.py
-└── admin.py
+    ├── models.py
+    └── admin.py
 
-````
+```
 
 ---
 
@@ -36,6 +36,7 @@ andreystyuhin-30_1_viewsets_and_generics/
 - **Курсы (`Course`)**
   - CRUD-операции через `ModelViewSet`
   - Автоматическая связь с уроками
+  - Вывод количества уроков и списка уроков в сериализаторе
 
 - **Уроки (`Lesson`)**
   - CRUD через `ListCreateAPIView` и `RetrieveUpdateDestroyAPIView`
@@ -45,53 +46,105 @@ andreystyuhin-30_1_viewsets_and_generics/
   - Кастомная модель без `username`
   - Авторизация по `email`
   - Поля: `email`, `phone`, `city`, `avatar`
+  - Вывод истории платежей в профиле
+
+- **Платежи (`Payment`)**
+  - Модель для хранения платежей
+  - Фильтрация и сортировка в API
 
 ---
 
 ## ⚙️ Установка и запуск проекта
 
-### 1. Клонировать репозиторий
+### Вариант 1: Локальная установка (без Docker)
+
+#### 1. Клонировать репозиторий
 ```bash
 git clone https://github.com/your-username/andreystyuhin-30_1_viewsets_and_generics.git
 cd andreystyuhin-30_1_viewsets_and_generics
-````
+```
 
-### 2. Создать и активировать виртуальное окружение
+#### 2. Настроить PostgreSQL
+- Установите PostgreSQL на вашей машине.
+- Создайте базу данных:
+  ```bash
+  sudo su - postgres
+  psql
+  CREATE DATABASE lms_db;
+  CREATE USER postgres WITH PASSWORD 'your_password_here';
+  GRANT ALL PRIVILEGES ON DATABASE lms_db TO postgres;
+  \q
+  ```
+- Скопируйте `.env.example` в `.env` и отредактируйте переменные (SECRET_KEY, DB_PASSWORD и т.д.).
 
+#### 3. Создать и активировать виртуальное окружение
 ```bash
 python -m venv .venv
 source .venv/bin/activate   # Linux / macOS
 .venv\Scripts\activate      # Windows
 ```
 
-### 3. Установить зависимости
-
+#### 4. Установить зависимости
 ```bash
 pip install -r requirements.txt
 ```
 
-*(если файла `requirements.txt` нет — можно создать его командой `pip freeze > requirements.txt`)*
-
-### 4. Применить миграции
-
+#### 5. Применить миграции
 ```bash
+python manage.py makemigrations
 python manage.py migrate
 ```
 
-### 5. Создать суперпользователя
+#### 6. Загрузить фикстуры (для тестовых данных платежей)
+```bash
+python manage.py loaddata users/fixtures/payments.json
+```
 
+#### 7. Создать суперпользователя
 ```bash
 python manage.py createsuperuser
 ```
 
-### 6. Запустить сервер
-
+#### 8. Запустить сервер
 ```bash
 python manage.py runserver
 ```
 
-Сервер будет доступен по адресу:
-👉 [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
+Сервер будет доступен по адресу: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
+
+### Вариант 2: Запуск с Docker и PostgreSQL
+
+#### 1. Клонировать репозиторий (если не сделано)
+```bash
+git clone https://github.com/your-username/andreystyuhin-30_1_viewsets_and_generics.git
+cd andreystyuhin-30_1_viewsets_and_generics
+```
+
+#### 2. Настроить .env
+Скопируйте `.env.example` в `.env` и отредактируйте переменные (SECRET_KEY, DB_PASSWORD и т.д.).
+
+#### 3. Собрать и запустить контейнеры
+```bash
+docker-compose up --build
+```
+
+#### 4. Применить миграции (в отдельном терминале)
+```bash
+docker-compose exec web python manage.py makemigrations
+docker-compose exec web python manage.py migrate
+```
+
+#### 5. Загрузить фикстуры
+```bash
+docker-compose exec web python manage.py loaddata users/fixtures/payments.json
+```
+
+#### 6. Создать суперпользователя
+```bash
+docker-compose exec web python manage.py createsuperuser
+```
+
+Сервер будет доступен по адресу: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
 
 ---
 
@@ -109,6 +162,7 @@ python manage.py runserver
 | `GET`       | `/api/lessons/{id}/` | Получить урок          |
 | `PUT/PATCH` | `/api/lessons/{id}/` | Изменить урок          |
 | `DELETE`    | `/api/lessons/{id}/` | Удалить урок           |
+| `GET`       | `/api/users/payments/` | Получить список платежей (с фильтрами) |
 
 ---
 
@@ -117,7 +171,8 @@ python manage.py runserver
 * [Python 3.13](https://www.python.org/)
 * [Django 5.2](https://www.djangoproject.com/)
 * [Django REST Framework](https://www.django-rest-framework.org/)
-* SQLite (по умолчанию)
+* [PostgreSQL](https://www.postgresql.org/) (как основная БД)
+* [Docker](https://www.docker.com/)
 
 ---
 
@@ -127,10 +182,11 @@ python manage.py runserver
 | -------------------------- | ------------------------------------------ | -------- |
 | ✅ 1. Базовые модели и CRUD | Курсы, уроки, сериализаторы, ViewSets      | Готово   |
 | 🔄 2. Кастомный User       | Email вместо username                      | Готово   |
-| ⏳ 3. JWT аутентификация    | Подключить `djangorestframework-simplejwt` | В планах |
-| ⏳ 4. Тестирование          | Настроить `pytest` и `coverage`            | В планах |
-| ⏳ 5. Документация API      | Подключить Swagger / drf-spectacular       | В планах |
-| ⏳ 6. Docker                | Добавить Docker + Postgres                 | В планах |
+| ✅ 3. Платежи               | Модель платежей, фикстуры, фильтры         | Готово   |
+| ✅ 4. Интеграция с PostgreSQL | Настройка БД, Docker Compose               | Готово   |
+| ⏳ 5. JWT аутентификация    | Подключить `djangorestframework-simplejwt` | В планах |
+| ⏳ 6. Тестирование          | Настроить `pytest` и `coverage`            | В планах |
+| ⏳ 7. Документация API      | Подключить Swagger / drf-spectacular       | В планах |
 
 ---
 
@@ -158,6 +214,8 @@ pytest -v
   * `media/courses/`
   * `media/lessons/`
   * `media/avatars/`
+
+В Docker: media volume настроен в docker-compose.yml.
 
 ---
 

@@ -1,10 +1,13 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
-from users.models import User
+from rest_framework.filters import OrderingFilter
+from django_filters.rest_framework import DjangoFilterBackend
+from users.models import User, Payment
 from users.serializers import (
     UserSerializer,
     UserCreateSerializer,
-    UserProfileSerializer
+    UserProfileSerializer,
+    PaymentSerializer
 )
 
 
@@ -43,3 +46,12 @@ class UserDestroyView(generics.DestroyAPIView):
     """Удаление пользователя"""
     queryset = User.objects.all()
     serializer_class = UserSerializer
+
+
+class PaymentListView(generics.ListAPIView):
+    """Список платежей с фильтрами и сортировкой"""
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['course', 'lesson', 'payment_method']
+    ordering_fields = ['payment_date']
