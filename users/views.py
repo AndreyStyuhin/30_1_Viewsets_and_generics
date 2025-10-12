@@ -1,4 +1,4 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
@@ -9,43 +9,54 @@ from users.serializers import (
     UserProfileSerializer,
     PaymentSerializer
 )
+from users.serializers import PublicUserSerializer
 
 
 class UserCreateView(generics.CreateAPIView):
-    """Создание нового пользователя (регистрация)"""
     queryset = User.objects.all()
     serializer_class = UserCreateSerializer
+    permission_classes = [permissions.AllowAny]
 
 
 class UserListView(generics.ListAPIView):
-    """Список всех пользователей"""
     queryset = User.objects.all()
-    serializer_class = UserSerializer
+    serializer_class = PublicUserSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
 
 class UserRetrieveView(generics.RetrieveAPIView):
-    """Просмотр профиля пользователя"""
     queryset = User.objects.all()
-    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    def get_serializer_class(self):
+        user = self.request.user
+        obj = self.get_object()
+        if obj == user:
+            return UserProfileSerializer
+        return PublicUserSerializer
 
 
 class UserProfileUpdateView(generics.RetrieveUpdateAPIView):
-    """Редактирование профиля пользователя"""
     queryset = User.objects.all()
     serializer_class = UserProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self):
-        """
-        Можно вернуть текущего пользователя
-        Пока возвращаем по pk из URL
-        """
-        return super().get_object()
+
+def get_object(self):
+    # позволяем пользователю редактировать только свой профиль
+    return self.request.user
 
 
 class UserDestroyView(generics.DestroyAPIView):
-    """Удаление пользователя"""
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, *args, **kwargs):
+    # разрешаем удаление только своему аккаунту
+        obj = self.get_object()
+        if obj != request.user:
+            return Response({'detail': 'You can delete only your account.'}, status=403)
+        return super().delete(request, *args, **kwargs)
 
 
 class PaymentListView(generics.ListAPIView):
