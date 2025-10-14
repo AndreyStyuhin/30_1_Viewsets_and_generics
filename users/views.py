@@ -61,8 +61,14 @@ class UserDestroyView(generics.DestroyAPIView):
 
 class PaymentListView(generics.ListAPIView):
     """Список платежей с фильтрами и сортировкой"""
-    queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['course', 'lesson', 'payment_method']
     ordering_fields = ['payment_date']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.groups.filter(name='moderators').exists():
+            return Payment.objects.all()
+        else:
+            return Payment.objects.filter(user=user)
