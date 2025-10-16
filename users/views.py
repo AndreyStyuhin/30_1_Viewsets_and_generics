@@ -1,8 +1,8 @@
-from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from users.models import User, Payment
+from users.permissions import IsOwner
 from users.serializers import (
     UserSerializer,
     UserCreateSerializer,
@@ -10,6 +10,8 @@ from users.serializers import (
     PaymentSerializer
 )
 from users.serializers import PublicUserSerializer
+from rest_framework import generics, permissions, status
+from users.models import User
 
 
 class UserCreateView(generics.CreateAPIView):
@@ -36,15 +38,11 @@ class UserRetrieveView(generics.RetrieveAPIView):
 
 
 class UserProfileUpdateView(generics.RetrieveUpdateAPIView):
-    queryset = User.objects.all()
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-
-def get_object(self):
-    # позволяем пользователю редактировать только свой профиль
-    return self.request.user
-
+    def get_object(self):
+        return self.request.user
 
 class UserDestroyView(generics.DestroyAPIView):
     queryset = User.objects.all()

@@ -1,6 +1,7 @@
-# Access Rights in DRF
 
-Django REST Framework project demonstrating user authentication, permissions, and access rights management.
+# Validations pagination and tests
+
+Django REST Framework project demonstrating user authentication, permissions, access rights management, course subscriptions, and link validation.
 
 ---
 
@@ -18,9 +19,9 @@ Django REST Framework project demonstrating user authentication, permissions, an
 
 ### 1. Клонируем репозиторий
 ```bash
-git clone https://github.com/yourusername/31_Access_rights_in_DRF.git
-cd 31_Access_rights_in_DRF
-````
+git clone https://github.com/andreystyuhin/andreystyuhin-30_1_viewsets_and_generics.git
+cd andreystyuhin-30_1_viewsets_and_generics
+```
 
 ### 2. Создаём и активируем виртуальное окружение
 
@@ -131,19 +132,28 @@ http://127.0.0.1:8000/
 
 ---
 
+## Новые функции
+
+- **Валидация ссылок**: В уроках разрешены только YouTube-ссылки.
+- **Подписки**: Эндпоинт /api/subscriptions/ для toggle подписки (POST с course_id).
+- **Пагинация**: Для списков курсов и уроков (page_size=10).
+- **Тесты**: Покрытие CRUD для уроков, подписок и других эндпоинтов (запустить pytest --cov).
+
+---
+
 ## ✅ Тестирование (Pytest)
 
 Если используете **pytest**, запустите тесты:
 
 ```bash
-pytest
+pytest --cov
 ```
 
 Для удобства добавьте файл `pytest.ini` в корень проекта:
 
 ```ini
 [pytest]
-DJANGO_SETTINGS_MODULE = project_name.settings
+DJANGO_SETTINGS_MODULE = config.settings
 python_files = tests.py test_*.py *_tests.py
 ```
 
@@ -178,5 +188,3 @@ sudo -u postgres psql -c "\dn+"
 Проект распространяется под лицензией MIT.
 
 ```
-
----

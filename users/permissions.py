@@ -10,7 +10,10 @@ class IsModer(permissions.BasePermission):
 
 
 class IsOwner(permissions.BasePermission):
-    """Разрешение на основе наличия атрибута owner у объекта"""
-
+#    """Разрешение на основе наличия атрибута owner у объекта"""
     def has_object_permission(self, request, view, obj):
         return bool(request.user and request.user.is_authenticated and getattr(obj, 'owner', None) == request.user)
+
+#    def has_object_permission(self, request, view, obj):
+#        print(f"Checking permission: user={request.user}, obj={obj}")
+#        return bool(request.user and request.user.is_authenticated and obj == request.user)
