@@ -1,11 +1,11 @@
 from rest_framework import serializers
 from materials.models import Course, Lesson, Subscription
-from materials.validators import validate_video_url
+from materials.validators import YouTubeURLValidator
 
 
 class LessonSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(read_only=True)
-    video_url = serializers.URLField(validators=[validate_video_url])  # Привязываем валидатор к полю
+    video_url = serializers.URLField(validators=[YouTubeURLValidator()])  # Используем новый валидатор
 
     class Meta:
         model = Lesson
