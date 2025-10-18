@@ -3,13 +3,18 @@ from materials.models import Course, Lesson, Subscription
 from materials.paginators import MaterialsPagination
 from materials.serializers import CourseSerializer, LessonSerializer
 from users.permissions import IsModer, IsOwner
+from materials.permissions import IsModerOrIsOwner
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from rest_framework.permissions import BasePermission, IsAuthenticated
+
 
 class CourseViewSet(viewsets.ModelViewSet):
+    queryset = Course.objects.all().order_by('id')
     serializer_class = CourseSerializer
     pagination_class = MaterialsPagination
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -22,17 +27,22 @@ class CourseViewSet(viewsets.ModelViewSet):
         # Регулярные пользователи: видеть список/создавать свои объекты
         if self.action in ['list', 'create']:
             return [permissions.IsAuthenticated()]
+
         if self.action in ['retrieve', 'update', 'partial_update']:
-            # Модераторы могут просматривать/редактировать любые; владельцы — свои
-            return [permissions.IsAuthenticated(), IsModer() | IsOwner()]
+            # Модераторы или владельцы могут просматривать/редактировать
+            return [permissions.IsAuthenticated(), IsModerOrIsOwner()]
+
         if self.action == 'destroy':
             # Только владелец может удалить
             return [permissions.IsAuthenticated(), IsOwner()]
+
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
 
 # Generic-классы для уроков
 class LessonListCreateView(generics.ListCreateAPIView):
@@ -81,3 +91,15 @@ class SubscriptionToggleView(APIView):
             Subscription.objects.create(user=user, course=course)
             message = 'подписка добавлена'
         return Response({'message': message}, status=status.HTTP_200_OK)
+
+
+class IsModerOrOwner(BasePermission):
+    """
+    Разрешение, которое позволяет доступ, если пользователь является модератором
+    или владельцем объекта.
+    """
+
+    def has_object_permission(self, request, view, obj):
+        return IsModer().has_permission(request, view) or IsOwner().has_object_permission(request, view, obj)
+
+
