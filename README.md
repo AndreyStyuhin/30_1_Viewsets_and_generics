@@ -52,14 +52,14 @@ sudo -u postgres psql
 
 ```sql
 CREATE USER stayer WITH PASSWORD 'your_password';
-CREATE DATABASE access_rights OWNER stayer;
-GRANT ALL PRIVILEGES ON DATABASE access_rights TO stayer;
+CREATE DATABASE lms_db OWNER stayer;
+GRANT ALL PRIVILEGES ON DATABASE lms_db TO stayer;
 ```
 
 ### 3. Настраиваем схему `public`
 
 ```sql
-ALTER DATABASE access_rights OWNER TO stayer;
+ALTER DATABASE lms_db OWNER TO stayer;
 ALTER SCHEMA public OWNER TO stayer;
 GRANT ALL ON SCHEMA public TO stayer;
 ```
@@ -86,7 +86,7 @@ GRANT ALL ON SCHEMA public TO stayer;
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'access_rights',
+        'NAME': 'lms_db',
         'USER': 'stayer',
         'PASSWORD': 'your_password',
         'HOST': 'localhost',

@@ -1,27 +1,27 @@
-from rest_framework import permissions
+# ФАЙЛ: materials/permissions.py (Воссоздан на основе тестов)
 
-# Этот класс больше не нужен, его логика перенесена в IsModerOrIsOwner
-# class IsModer(permissions.BasePermission):
-#     def has_permission(self, request, view):
-#         user = request.user
-#         return bool(user and user.is_authenticated and user.groups.filter(name='moderators').exists())
+from rest_framework.permissions import BasePermission
 
-# Этот класс больше не нужен, его логика перенесена в IsModerOrIsOwner
-# class IsOwner(permissions.BasePermission):
-#     def has_object_permission(self, request, view, obj):
-#         return bool(request.user and request.user.is_authenticated and getattr(obj, 'owner', None) == request.user)
-
-
-class IsModerOrIsOwner(permissions.BasePermission):
+class IsModerator(BasePermission):
     """
-    Разрешение, если пользователь является модератором или владельцем объекта.
+    Права доступа для модератора.
+    Модератор (группа 'moderators') имеет доступ.
     """
+    message = 'Вы не являетесь модератором.'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        return request.user.groups.filter(name='moderators').exists()
+
+class IsOwner(BasePermission):
+    """
+    Права доступа для владельца объекта.
+    Владелец (obj.owner) имеет доступ.
+    """
+    message = 'Вы не являетесь владельцем.'
+
     def has_object_permission(self, request, view, obj):
-        # Проверяем, является ли пользователь владельцем объекта
-        is_owner = getattr(obj, 'owner', None) == request.user
-
-        # Проверяем, является ли пользователь модератором
-        is_moderator = request.user.groups.filter(name='moderators').exists()
-
-        # Разрешаем доступ, если выполняется хотя бы одно из условий
-        return request.user.is_authenticated and (is_owner or is_moderator)
+        if not request.user.is_authenticated:
+            return False
+        return obj.owner == request.user

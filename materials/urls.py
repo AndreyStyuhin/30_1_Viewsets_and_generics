@@ -1,21 +1,19 @@
-from django.urls import path, include
+from django.urls import path
 from rest_framework.routers import DefaultRouter
-from materials.views import (
-    CourseViewSet,
-    LessonListCreateView,
-    LessonRetrieveUpdateDestroyView,
-    SubscriptionToggleView
-)
+from materials.apps import MaterialsConfig
+from materials.views import CourseViewSet, LessonListCreateAPIView, LessonRetrieveUpdateDestroyAPIView, SubscriptionAPIView
 
-app_name = 'materials'
+app_name = MaterialsConfig.name
 
 router = DefaultRouter()
 router.register(r'courses', CourseViewSet, basename='course')
 
 urlpatterns = [
-    path('lessons/', LessonListCreateView.as_view(), name='lesson-list-create'),
-    path('lessons/<int:pk>/', LessonRetrieveUpdateDestroyView.as_view(), name='lesson-detail'),
-    path('subscriptions/', SubscriptionToggleView.as_view(), name='subscription-toggle'),
-]
+    # Эндпоинты для уроков (согласно тестам)
+    path('lessons/', LessonListCreateAPIView.as_view(), name='lesson-list-create'),
+    path('lessons/<int:pk>/', LessonRetrieveUpdateDestroyAPIView.as_view(), name='lesson-detail'),
 
-urlpatterns += router.urls
+    # Эндпоинт для подписки
+    path('subscriptions/', SubscriptionAPIView.as_view(), name='subscription-toggle'),
+
+] + router.urls
