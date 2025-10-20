@@ -3,9 +3,13 @@ from users.models import User, Payment
 
 
 class PaymentSerializer(serializers.ModelSerializer):
+    """Стандартный сериализатор для просмотра списка платежей."""
+
     class Meta:
         model = Payment
         fields = '__all__'
+        read_only_fields = ('user', 'payment_date', 'amount', 'stripe_session_id', 'payment_link', 'is_paid',
+                            'payment_method')
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -45,3 +49,29 @@ class PublicUserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'email', 'first_name', 'avatar', 'city']
         read_only_fields = ['id', 'email']
+
+
+class PaymentCreateSerializer(serializers.ModelSerializer):
+    """Сериализатор для инициирования платежа через POST-запрос."""
+
+    class Meta:
+        model = Payment
+        fields = ('course', 'lesson')
+        extra_kwargs = {
+            'course': {'required': False},
+            'lesson': {'required': False},
+        }
+
+    def validate(self, data):
+        # Проверка, что оплачивается либо курс, либо урок, но не оба
+        course = data.get('course')
+        lesson = data.get('lesson')
+
+        if course and lesson:
+            raise serializers.ValidationError("Нельзя оплачивать одновременно курс и урок.")
+        if not (course or lesson):
+            raise serializers.ValidationError("Необходимо указать курс или урок для оплаты.")
+
+        # Установка способа оплаты как 'TRANSFER' (для Stripe)
+        data['payment_method'] = Payment.PaymentMethod.TRANSFER
+        return data

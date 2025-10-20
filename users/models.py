@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.conf import settings
+from materials.models import Course, Lesson # Импорт для связи с курсами/уроками
 
 
 class UserManager(BaseUserManager):
@@ -51,21 +53,26 @@ class User(AbstractUser):
 
 
 class Payment(models.Model):
-    PAYMENT_METHOD_CHOICES = [
-        ('cash', 'Наличные'),
-        ('transfer', 'Перевод на счет'),
-    ]
+    class PaymentMethod(models.TextChoices):
+        CASH = 'CASH', 'Наличные'
+        TRANSFER = 'TRANSFER', 'Перевод'
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments', verbose_name='Пользователь')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Пользователь')
     payment_date = models.DateTimeField(auto_now_add=True, verbose_name='Дата оплаты')
-    course = models.ForeignKey('materials.Course', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Оплаченный курс')
-    lesson = models.ForeignKey('materials.Lesson', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Оплаченный урок')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, null=True, blank=True, verbose_name='Оплаченный курс')
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, null=True, blank=True, verbose_name='Оплаченный урок')
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Сумма оплаты')
-    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, verbose_name='Способ оплаты')
+    payment_method = models.CharField(max_length=10, choices=PaymentMethod.choices, verbose_name='Способ оплаты')
+
+    # Stripe specific fields
+    stripe_session_id = models.CharField(max_length=255, null=True, blank=True, verbose_name='ID сессии Stripe')
+    payment_link = models.URLField(max_length=500, null=True, blank=True, verbose_name='Ссылка на оплату')
+    is_paid = models.BooleanField(default=False, verbose_name='Оплачено')
 
     class Meta:
         verbose_name = 'Платеж'
         verbose_name_plural = 'Платежи'
+        ordering = ['-payment_date']
 
     def __str__(self):
-        return f'{self.user} - {self.amount} ({self.payment_method})'
+        return f'{self.user} - {self.course if self.course else self.lesson} - {self.amount}'
