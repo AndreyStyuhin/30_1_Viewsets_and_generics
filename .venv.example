@@ -1,3 +1,4 @@
+# ФАЙЛ: .venv.example (добавлены ключи Stripe)
 # Django settings
 SECRET_KEY=your-secret-key-here-change-this
 DEBUG=True
@@ -10,3 +11,9 @@ DB_USER=postgres
 DB_PASSWORD=your_password_here
 DB_HOST=db
 DB_PORT=5432
+
+# Stripe settings
+STRIPE_SECRET_KEY=sk_test_... # Вставь сюда свой секретный ключ Stripe
+STRIPE_PUBLIC_KEY=pk_test_... # Вставь сюда свой публичный ключ Stripe
+STRIPE_SUCCESS_URL=http://localhost:8000/api/users/payments/success/
+STRIPE_CANCEL_URL=http://localhost:8000/api/users/payments/cancel/

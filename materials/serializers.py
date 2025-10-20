@@ -1,7 +1,9 @@
+# ФАЙЛ: materials/serializers.py
+
 from rest_framework import serializers
 from materials.models import Course, Lesson, Subscription
 from materials.validators import YouTubeURLValidator
-from rest_framework.fields import SerializerMethodField
+from drf_spectacular.utils import extend_schema_field
 
 
 class LessonSerializer(serializers.ModelSerializer):
@@ -23,31 +25,29 @@ class LessonSerializer(serializers.ModelSerializer):
 
 class CourseSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(read_only=True, help_text="ID владельца курса")
-
-    # lesson_count: количество уроков в курсе
     lesson_count = serializers.SerializerMethodField(help_text="Количество уроков в курсе")
-
-    # lessons: вложенный сериализатор для отображения списка уроков
     lessons = LessonSerializer(many=True, read_only=True,
                                help_text="Список уроков, принадлежащих этому курсу (для просмотра)")
-
-    # is_subscribed: признак подписки текущего пользователя
     is_subscribed = serializers.SerializerMethodField(help_text="Признак подписки текущего пользователя на этот курс")
-
-    # Предполагается, что поля модели Course включают title, description, preview
     title = serializers.CharField(help_text="Название курса")
     description = serializers.CharField(help_text="Краткое описание курса")
     preview = serializers.ImageField(required=False, help_text="Превью/изображение курса")
+    price = serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Цена курса (в рублях)")
 
     class Meta:
         model = Course
-        fields = '__all__'
+        fields = ('id', 'title', 'description', 'preview', 'owner',
+                  'price', 'lesson_count', 'lessons', 'is_subscribed')
 
+
+    @extend_schema_field(serializers.BooleanField())
     def get_is_subscribed(self, obj):
         user = self.context['request'].user
         if user.is_anonymous:
             return False
         return Subscription.objects.filter(user=user, course=obj).exists()
 
+
+    @extend_schema_field(serializers.IntegerField())
     def get_lesson_count(self, obj):
         return obj.lessons.count()
