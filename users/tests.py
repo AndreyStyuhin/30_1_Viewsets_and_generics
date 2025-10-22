@@ -1,3 +1,258 @@
-from django.test import TestCase
+from rest_framework.test import APITestCase
+from rest_framework import status
+from django.contrib.auth import get_user_model
+from materials.models import Course, Lesson
+from users.models import Payment
+from django.urls import reverse
 
-# Create your tests here.
+User = get_user_model()
+
+class UsersTests(APITestCase):
+    def setUp(self):
+        """
+        Подготовка тестовых данных: пользователи, курс, урок.
+        Вызывается перед каждым тестом.
+        """
+        # Создаем двух пользователей
+        self.user1 = User.objects.create_user(
+            email='user1@test.com',
+            password='testpass123',
+            first_name='John',
+            last_name='Doe',
+            phone='123456789',
+            city='Moscow'
+        )
+        self.user2 = User.objects.create_user(
+            email='user2@test.com',
+            password='testpass123',
+            first_name='Jane',
+            last_name='Smith'
+        )
+        # Создаем модератора
+        self.moderator = User.objects.create_user(
+            email='moderator@test.com',
+            password='testpass123',
+            is_staff=True
+        )
+        self.moderator.groups.create(name='moderators')  # Предполагаем группу moderators
+
+        # Создаем курс и урок для тестов платежей
+        self.course = Course.objects.create(title='Test Course', owner=self.user1)
+        self.lesson = Lesson.objects.create(
+            title='Test Lesson',
+            course=self.course,
+            owner=self.user1,
+            video_url='https://www.youtube.com/watch?v=test'
+        )
+
+    def test_create_user(self):
+        """
+        Тест создания пользователя через /api/users/register/
+        """
+        url = reverse('users:user-register')
+        data = {
+            'email': 'newuser@test.com',
+            'password': 'testpass123',
+            'first_name': 'New',
+            'last_name': 'User',
+            'phone': '987654321',
+            'city': 'Berlin'
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(User.objects.count(), 4)  # 3 из setUp + 1 новый
+        self.assertEqual(User.objects.last().email, 'newuser@test.com')
+
+    def test_create_user_invalid_email(self):
+        """
+        Тест создания пользователя с некорректным email
+        """
+        url = reverse('users:user-register')
+        data = {
+            'email': 'invalid-email',
+            'password': 'testpass123'
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_list_users_authenticated(self):
+        """
+        Тест получения списка пользователей (доступно только авторизованным)
+        """
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('users:user-list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 3)  # 3 пользователя из setUp
+
+    def test_list_users_unauthenticated(self):
+        """
+        Тест получения списка пользователей без аутентификации
+        """
+        url = reverse('users:user-list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_retrieve_own_profile(self):
+        """
+        Тест получения собственного профиля (должен вернуть полный профиль)
+        """
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('users:user-detail', kwargs={'pk': self.user1.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['email'], 'user1@test.com')
+        self.assertIn('phone', response.data)  # Полный профиль для владельца
+
+    def test_retrieve_other_profile(self):
+        """
+        Тест получения профиля другого пользователя (должен вернуть публичные данные)
+        """
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('users:user-detail', kwargs={'pk': self.user2.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['email'], 'user2@test.com')
+        self.assertNotIn('phone', response.data)  # Публичный сериализатор не включает phone
+
+    def test_update_own_profile(self):
+        """
+        Тест обновления собственного профиля
+        """
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('users:user-profile-update')  # Без pk
+        data = {
+            'first_name': 'Updated',
+            'city': 'New York'
+        }
+        response = self.client.patch(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user1.refresh_from_db()
+        self.assertEqual(self.user1.first_name, 'Updated')
+        self.assertEqual(self.user1.city, 'New York')
+
+    def test_update_other_profile(self):
+        """
+        Тест попытки обновления чужого профиля (невозможна, так как маршрут редактирует только свой профиль)
+        """
+        self.client.force_authenticate(user=self.user2)
+        url = reverse('users:user-profile-update')  # Без pk
+        data = {'first_name': 'Hacked'}
+        response = self.client.patch(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user2.refresh_from_db()
+        self.assertEqual(self.user2.first_name, 'Hacked')  # user2 обновил свой профиль
+        self.user1.refresh_from_db()
+        self.assertNotEqual(self.user1.first_name, 'Hacked')  # Профиль user1 не изменился
+
+    def test_delete_own_profile(self):
+        """
+        Тест удаления собственного профиля
+        """
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('users:user-delete', kwargs={'pk': self.user1.pk})
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(User.objects.filter(pk=self.user1.pk).exists())
+
+    def test_delete_other_profile(self):
+        """
+        Тест попытки удаления чужого профиля
+        """
+        self.client.force_authenticate(user=self.user2)
+        url = reverse('users:user-delete', kwargs={'pk': self.user1.pk})
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(User.objects.filter(pk=self.user1.pk).exists())
+
+class PaymentsTests(APITestCase):
+    def setUp(self):
+        """
+        Подготовка тестовых данных: пользователи, курс, урок, платежи.
+        """
+        self.user = User.objects.create_user(
+            email='user@test.com',
+            password='testpass123'
+        )
+        self.course = Course.objects.create(title='Test Course', owner=self.user)
+        self.lesson = Lesson.objects.create(
+            title='Test Lesson',
+            course=self.course,
+            owner=self.user,
+            video_url='https://www.youtube.com/watch?v=test'
+        )
+        self.payment1 = Payment.objects.create(
+            user=self.user,
+            course=self.course,
+            amount=99.99,
+            payment_method='transfer'
+        )
+        self.payment2 = Payment.objects.create(
+            user=self.user,
+            lesson=self.lesson,
+            amount=19.99,
+            payment_method='cash'
+        )
+
+    def test_list_payments_authenticated(self):
+        """
+        Тест получения списка платежей (авторизованный пользователь)
+        """
+        self.client.force_authenticate(user=self.user)
+        url = reverse('users:payment-list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)  # 2 платежа из setUp
+
+    def test_list_payments_unauthenticated(self):
+        """
+        Тест получения списка платежей без аутентификации
+        """
+        url = reverse('users:payment-list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_filter_payments_by_course(self):
+        """
+        Тест фильтрации платежей по курсу
+        """
+        self.client.force_authenticate(user=self.user)
+        url = reverse('users:payment-list')
+        response = self.client.get(url, {'course': self.course.pk})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['course'], self.course.pk)
+
+    def test_filter_payments_by_lesson(self):
+        """
+        Тест фильтрации платежей по уроку
+        """
+        self.client.force_authenticate(user=self.user)
+        url = reverse('users:payment-list')
+        response = self.client.get(url, {'lesson': self.lesson.pk})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['lesson'], self.lesson.pk)
+
+    def test_filter_payments_by_payment_method(self):
+        """
+        Тест фильтрации платежей по способу оплаты
+        """
+        self.client.force_authenticate(user=self.user)
+        url = reverse('users:payment-list')
+        response = self.client.get(url, {'payment_method': 'cash'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['payment_method'], 'cash')
+
+    def test_order_payments_by_date(self):
+        """
+        Тест сортировки платежей по дате
+        """
+        self.client.force_authenticate(user=self.user)
+        url = reverse('users:payment-list')
+        response = self.client.get(url, {'ordering': '-payment_date'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        # Проверяем, что платежи отсортированы по убыванию даты
+        self.assertTrue(response.data[0]['payment_date'] >= response.data[1]['payment_date'])
