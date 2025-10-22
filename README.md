@@ -1,7 +1,7 @@
 
-# Validations pagination and tests
+# Celery
 
-Django REST Framework project demonstrating user authentication, permissions, access rights management, course subscriptions, and link validation.
+Celery — инструмент для асинхронной обработки задач в приложениях на Python. Используем Celery для создания отложенных и периодических задач
 
 ---
 
@@ -12,6 +12,7 @@ Django REST Framework project demonstrating user authentication, permissions, ac
 - **Django REST Framework**
 - **PostgreSQL**
 - **JWT Authentication**
+- **Celery**
 
 ---
 

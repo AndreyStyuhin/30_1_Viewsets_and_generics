@@ -1,179 +1,188 @@
-# ФАЙЛ: materials/views.py
-
-from rest_framework import viewsets, generics
-from rest_framework.permissions import IsAuthenticated
+from rest_framework import viewsets, generics, status
 from rest_framework.response import Response
-from rest_framework import status
-# Добавлен @extend_schema_field для сериализатора
-from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer, extend_schema_field
+from rest_framework.permissions import IsAuthenticated, BasePermission
+from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from datetime import timedelta
+
 from materials.models import Course, Lesson, Subscription
 from materials.serializers import CourseSerializer, LessonSerializer
 from materials.paginators import MaterialsPagination
-from materials.permissions import IsOwner, IsModerator
-from rest_framework import serializers  # для inline_serializer
+from materials.tasks import send_course_update_notification  # <--- TASK 2
+
+
+class IsModerator(BasePermission):
+    """
+    Права доступа для группы 'moderators'.
+    """
+
+    def has_permission(self, request, view):
+        return request.user.groups.filter(name='moderators').exists()
+
+
+class IsOwner(BasePermission):
+    """
+    Права доступа для владельца объекта.
+    """
+
+    def has_object_permission(self, request, view, obj):
+        # Проверяем, есть ли у объекта атрибут 'owner'
+        if hasattr(obj, 'owner'):
+            return obj.owner == request.user
+        return False
+
+
+# --- End Permissions ---
 
 
 class CourseViewSet(viewsets.ModelViewSet):
-    """
-    (Задание 1)
-    ViewSet для управления курсами.
-    Позволяет создавать, просматривать, редактировать и удалять курсы.
-    - Обычные пользователи: видят, редактируют, удаляют только *свои* курсы.
-    - Модераторы: видят и редактируют *все* курсы, но не могут их удалять.
-    """
     serializer_class = CourseSerializer
     pagination_class = MaterialsPagination
 
-    def get_queryset(self):
-        """
-        Модераторы видят все курсы,
-        обычные пользователи - только свои.
-        """
-        # --- ИСПРАВЛЕНИЕ (Warning 1): Проверка на AnonymousUser для drf-spectacular ---
-        if not self.request.user.is_authenticated:
-            return Course.objects.none()
-        # ---
-
-        if self.request.user.groups.filter(name='moderators').exists():
-            return Course.objects.all().order_by('id')
-        return Course.objects.filter(owner=self.request.user).order_by('id')
-
     def get_permissions(self):
         """
-        Установка прав доступа в зависимости от действия.
-        - destroy: Только владелец (IsOwner)
-        - update/partial_update/retrieve: Владелец (IsOwner) ИЛИ Модератор (IsModerator)
-        - create/list: Любой аутентифицированный пользователь (IsAuthenticated)
+        Права доступа:
+        - Модераторы (IsModerator) могут всё (list, retrieve, update).
+        - Владельцы (IsOwner) могут всё со своими объектами.
+        - Создавать (create) может любой аутентифицированный пользователь.
+        - Удалять (destroy) может только владелец (не модератор) (согласно тестам).
         """
-        if self.action == 'destroy':
-            permission_classes = [IsAuthenticated, IsOwner]
+        if self.action == 'create':
+            self.permission_classes = [IsAuthenticated]
+        elif self.action == 'destroy':
+            self.permission_classes = [IsAuthenticated, IsOwner]
         elif self.action in ['update', 'partial_update', 'retrieve']:
-            permission_classes = [IsAuthenticated, IsOwner | IsModerator]
-        else:  # 'list', 'create'
-            permission_classes = [IsAuthenticated]
-        return [permission() for permission in permission_classes]
+            self.permission_classes = [IsAuthenticated, IsModerator | IsOwner]
+        else:  # list
+            self.permission_classes = [IsAuthenticated]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        """
+        - Модераторы видят все курсы.
+        - Обычные пользователи видят только свои курсы.
+        """
+        user = self.request.user
+        if user.groups.filter(name='moderators').exists():
+            return Course.objects.all()
+        return Course.objects.filter(owner=user)
 
     def perform_create(self, serializer):
-        """Присваиваем владельца при создании курса."""
+        """Присваиваем владельца при создании."""
         serializer.save(owner=self.request.user)
 
+    def perform_update(self, serializer):  # <--- TASK 2
+        """
+        Переопределяем обновление для отправки уведомлений
+        при обновлении самого КУРСА.
+        """
+        course = self.get_object()
 
-class LessonListCreateAPIView(generics.ListCreateAPIView):
-    """
-    (Задание 1)
-    API-эндпоинт для просмотра списка и создания уроков.
-    - POST: Создает новый урок (владелец присваивается автоматически).
-    - GET: Возвращает список уроков, принадлежащих текущему пользователю (или всех, если модератор).
-    """
+        # Проверка 4-часового интервала ПЕРЕД сохранением
+        can_notify = (timezone.now() - course.last_updated_at) > timedelta(hours=4)
+
+        # Сохраняем изменения курса и обновляем время вручную
+        updated_course = serializer.save(last_updated_at=timezone.now())
+
+        if can_notify:
+            send_course_update_notification.delay(updated_course.id, updated_course.title)
+
+
+class LessonListCreateView(generics.ListCreateAPIView):
     serializer_class = LessonSerializer
     pagination_class = MaterialsPagination
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]  # Создавать может любой
 
     def get_queryset(self):
         """
-        Модераторы видят все уроки,
-        обычные пользователи - только свои.
+        - Модераторы видят все уроки.
+        - Обычные пользователи видят только свои уроки.
         """
-        # --- ИСПРАВЛЕНИЕ (Warning 1): Проверка на AnonymousUser для drf-spectacular ---
-        if not self.request.user.is_authenticated:
-            return Lesson.objects.none()
-        # ---
-
-        if self.request.user.groups.filter(name='moderators').exists():
-            return Lesson.objects.all().order_by('id')
-        return Lesson.objects.filter(owner=self.request.user).order_by('id')
+        user = self.request.user
+        if user.groups.filter(name='moderators').exists():
+            return Lesson.objects.all()
+        return Lesson.objects.filter(owner=user)
 
     def perform_create(self, serializer):
-        """Присваиваем владельца при создании урока."""
-        serializer.save(owner=self.request.user)
+        """Присваиваем владельца при создании."""
+        lesson = serializer.save(owner=self.request.user)
+
+        # При создании урока также обновляем курс (Доп. задание)
+        course = lesson.course
+        if (timezone.now() - course.last_updated_at) > timedelta(hours=4):
+            send_course_update_notification.delay(course.id, course.title)
+
+        course.last_updated_at = timezone.now()
+        course.save()
 
 
-class LessonRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    (Задание 1)
-    API-эндпоинт для просмотра, редактирования и удаления урока.
-    - GET: Просмотр урока (владелец или модератор).
-    - PUT/PATCH: Редактирование урока (владелец или модератор).
-    - DELETE: Удаление урока (только владелец).
-    """
+class LessonRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = LessonSerializer
-
-    def get_queryset(self):
-        """
-        Модераторы видят все уроки,
-        обычные пользователи - только свои.
-        """
-        # --- ИСПРАВЛЕНИЕ (Warning 1): Проверка на AnonymousUser для drf-spectacular ---
-        if not self.request.user.is_authenticated:
-            return Lesson.objects.none()
-        # ---
-
-        if self.request.user.groups.filter(name='moderators').exists():
-            return Lesson.objects.all()
-        return Lesson.objects.filter(owner=self.request.user)
 
     def get_permissions(self):
         """
-        Установка прав доступа в зависимости от действия.
-        - destroy: Только владелец (IsOwner)
-        - update/partial_update/retrieve: Владелец (IsOwner) ИЛИ Модератор (IsModerator)
+        - Модераторы: retrieve, update.
+        - Владельцы: retrieve, update, destroy.
         """
-        # --- ИСПРАВЛЕНИЕ (Fatal Error): Заменено self.action на self.request.method ---
         if self.request.method == 'DELETE':
-            permission_classes = [IsAuthenticated, IsOwner]
-        else:  # 'GET', 'PUT', 'PATCH'
-            permission_classes = [IsAuthenticated, IsOwner | IsModerator]
-        # ---
-        return [permission() for permission in permission_classes]
+            self.permission_classes = [IsAuthenticated, IsOwner]
+        else:
+            self.permission_classes = [IsAuthenticated, IsModerator | IsOwner]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        """
+        - Модераторы видят все уроки.
+        - Обычные пользователи видят только свои уроки.
+        """
+        user = self.request.user
+        if user.groups.filter(name='moderators').exists():
+            return Lesson.objects.all()
+        return Lesson.objects.filter(owner=user)
+
+    def perform_update(self, serializer):  # <--- TASK 2 (Доп. задание)
+        """
+        Переопределяем обновление УРОКА, чтобы уведомить подписчиков КУРСА.
+        """
+        # Сохраняем урок
+        lesson = serializer.save()
+        course = lesson.course
+
+        # Проверка 4-часового интервала
+        if (timezone.now() - course.last_updated_at) > timedelta(hours=4):
+            # Отправляем уведомление
+            send_course_update_notification.delay(course.id, course.title)
+
+        # Обновляем время у курса (т.к. обновление урока = обновление курса)
+        course.last_updated_at = timezone.now()
+        course.save()
 
 
-@extend_schema(
-    summary="(Задание 1) Управление подпиской на курс (Toggle)",
-    description="""
-    Создает или удаляет подписку пользователя на указанный курс.
-    - Если подписки нет - создает.
-    - Если подписка есть - удаляет.
-    Возвращает статус 201 (Created) или 204 (No Content).
-    """,
-    request=inline_serializer(
-        name='SubscriptionToggleRequest',
-        fields={'course_id': serializers.IntegerField(help_text="ID курса для подписки/отписки")}
-    ),
-    responses={
-        201: inline_serializer(name='SubscriptionCreated', fields={'message': serializers.CharField()}),
-        204: 'Подписка успешно удалена (No Content).',
-        400: inline_serializer(name='SubscriptionError400', fields={'error': serializers.CharField()}),
-        404: inline_serializer(name='SubscriptionError404', fields={'error': serializers.CharField()})
-    }
-)
-class SubscriptionAPIView(generics.GenericAPIView):
-    """
-    API-эндпоинт для управления подписками (вкл/выкл).
-    Принимает POST-запрос с 'course_id'.
-    """
+class SubscriptionToggleView(APIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = None  # Только для схемы
 
     def post(self, request, *args, **kwargs):
+        """
+        Переключатель подписки (POST-запрос).
+        Ожидает {'course_id': ID_курса} в теле запроса.
+        """
         user = request.user
         course_id = request.data.get('course_id')
 
         if not course_id:
-            return Response({'error': 'Необходимо указать course_id.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Не указан course_id'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            course = Course.objects.get(pk=course_id)
-        except Course.DoesNotExist:
-            return Response({'error': 'Курс не найден.'}, status=status.HTTP_404_NOT_FOUND)
+        course = get_object_or_404(Course, id=course_id)
 
-        # Ищем существующую подписку
+        # Пытаемся найти подписку
         subscription, created = Subscription.objects.get_or_create(user=user, course=course)
 
         if created:
-            # Если подписка была создана
-            return Response({'message': f'Вы успешно подписались на курс "{course.title}".'},
-                            status=status.HTTP_201_CREATED)
+            message = 'подписка добавлена'
         else:
-            # Если подписка уже существовала, удаляем ее
+            # Если найдена, удаляем
             subscription.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            message = 'подписка удалена'
+
+        return Response({'message': message}, status=status.HTTP_200_OK)

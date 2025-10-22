@@ -1,5 +1,3 @@
-# ФАЙЛ: config/settings.py (добавлены ключи Stripe и настройки Spectacular)
-
 from pathlib import Path
 from decouple import config, Csv
 from datetime import timedelta
@@ -15,12 +13,6 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
-# ---
-STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='your_sk_test_key')
-STRIPE_SUCCESS_URL = config('STRIPE_SUCCESS_URL', default='http://localhost:8000/success')
-STRIPE_CANCEL_URL = config('STRIPE_CANCEL_URL', default='http://localhost:8000/cancel')
-# ---
-
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -30,11 +22,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework_simplejwt.token_blacklist',
-    'drf_spectacular', # <-- ЗАДАНИЕ 1: Для документации
 
     # Сторонние приложения
     'rest_framework',
     'django_filters',
+    'django_celery_beat',
 
     # Локальные приложения
     'users',
@@ -72,7 +64,8 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
-# ... (база данных как у тебя)
+# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+
 DATABASES = {
     'default': {
         'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
@@ -85,24 +78,45 @@ DATABASES = {
 }
 
 # Password validation
-# ...
+# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
+
 AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
 ]
 
 # Internationalization
+# https://docs.djangoproject.com/en/4.2/topics/i18n/
+
 LANGUAGE_CODE = 'ru-ru'
-TIME_ZONE = 'Europe/Moscow'
+
+TIME_ZONE = 'Europe/Moscow' # <--- TASK 3: Важно для Celery Beat
+
 USE_I18N = True
+
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/4.2/howto/static-files/
+
 STATIC_URL = 'static/'
+
+# Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -130,7 +144,6 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 
@@ -140,15 +153,43 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
 }
+# --- STRIPE SETTINGS ---
+STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='your_default_stripe_key')
 
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'LMS API Documentation',
-    'DESCRIPTION': 'Документация для API учебной платформы (LMS). <br>'
-                   'Включает эндпоинты для курсов, уроков, подписок, пользователей и платежей.',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'SWAGGER_UI_SETTINGS': {
-        'docExpansion': 'list',
-        'filter': True,
-    }
+REDIS_HOST = config('REDIS_HOST', default='localhost')
+REDIS_PORT = config('REDIS_PORT', default='6379')
+REDIS_DB = config('REDIS_DB', default='0')
+
+CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+CELERY_RESULT_BACKEND = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE # <--- TASK 3: Используем TIME_ZONE из Django
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
+
+
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_BEAT_SCHEDULE = {
+    'block_inactive_users_every_day': {
+        'task': 'users.tasks.block_inactive_users',
+        'schedule': timedelta(days=1), # Запускать раз в день
+        # (Можно использовать crontab: from celery.schedules import crontab)
+        # 'schedule': crontab(hour=0, minute=0), # Каждый день в полночь
+    },
 }
+
+# --- EMAIL SETTINGS (TASK 2) ---
+# (Для реальной отправки замените на SMTP, например, Mailgun или Sendgrid)
+# Используем консольный бэкенд для отладки
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' 
+
+# Пример настроек для GMAIL (не рекомендуется для продакшена):
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+# EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+# EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='') # 'your-email@gmail.com'
+# EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='') # 'your-app-password'
+# EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='LMS <no-reply@lms.com>')
