@@ -28,7 +28,8 @@ source .venv/bin/activate  # для Linux/Mac
 ```
 
 ##### 3. Устанавливаем зависимости
-```
+```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
