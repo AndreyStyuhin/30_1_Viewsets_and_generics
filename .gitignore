@@ -192,3 +192,19 @@ media/
 .env
 .idea/
 *.log
+
+# Environment
+.env
+*.env
+
+# Python cache
+__pycache__/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
+
+# Venv
+venv/
+env/

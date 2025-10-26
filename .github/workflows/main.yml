@@ -1,0 +1,125 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - develop #fix
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Run tests
+      env:
+        # Используем тестовые переменные окружения для БД
+        SECRET_KEY: 'test_key'
+        DEBUG: 'False'
+        ALLOWED_HOSTS: 'localhost,127.0.0.1'
+        POSTGRES_DB: test_db
+        POSTGRES_USER: test_user
+        POSTGRES_PASSWORD: test_password
+        POSTGRES_HOST: '127.0.0.1' # Сервис postgres доступен на localhost
+        POSTGRES_PORT: 5432
+      run: |
+        python manage.py test
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test # Запускать только после успешного прохождения тестов
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push Web image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:web
+
+    - name: Build and push Nginx image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./nginx
+        file: ./nginx/Dockerfile
+        push: true
+        tags: ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx
+
+    - name: Deploy to server
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }} # Если ваш ключ защищен паролем
+
+        script: |
+          cd /home/${{ secrets.SERVER_USER }}/projects/ваш_проект # Укажите ваш путь
+          
+          # Создаем .env файл из секретов GitHub
+          echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
+          echo "DEBUG=False" >> .env
+          echo "ALLOWED_HOSTS=${{ secrets.SERVER_HOST }},127.0.0.1,localhost" >> .env
+          echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}" >> .env
+          echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}" >> .env
+          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
+          echo "POSTGRES_HOST=db" >> .env
+          echo "POSTGRES_PORT=5432" >> .env
+          
+          # Обновляем docker-compose.yml, чтобы он использовал ваши образы
+          # (Этот шаг можно пропустить, если в docker-compose.yml уже указаны переменные)
+          # Здесь мы предполагаем, что вы используете переменные DOCKER_USERNAME и DOCKER_REPO
+          # в вашем docker-compose.yml
+          export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
+          export DOCKER_REPO=${{ secrets.DOCKER_REPO }}
+          
+          # Загружаем свежие образы
+          docker-compose pull
+          
+          # Перезапускаем контейнеры с новыми образами
+          docker-compose up -d --build
+          
+          # Выполняем миграции
+          docker-compose exec web python manage.py migrate
+          
+          # Собираем статику
+          docker-compose exec web python manage.py collectstatic --noinput
+          
+          # Очищаем старые образы (опционально)
+          docker image prune -f

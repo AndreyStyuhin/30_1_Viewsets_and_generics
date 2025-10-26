@@ -1,3 +1,4 @@
+celery
 drf-composable-permissions
 django-filter
 Django>=4.2,<5.0
@@ -9,3 +10,5 @@ python-decouple>=3.8
 pytest-django>=4.8.0
 drf-spectacular>=0.27.0
 stripe
+redis
+django-celery-beat
