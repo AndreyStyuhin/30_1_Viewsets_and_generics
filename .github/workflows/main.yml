@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - main  # Или ваша основная ветка, например, develop
+      - develop
 
 jobs:
   test:
