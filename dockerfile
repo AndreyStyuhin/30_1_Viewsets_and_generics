@@ -1,5 +1,5 @@
 # 1. Базовый образ
-FROM python:3.10-slim-buster
+FROM python:3.12-slim-bookworm
 
 # Установка системных зависимостей
 RUN apt-get update \
