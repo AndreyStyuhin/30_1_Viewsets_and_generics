@@ -8,6 +8,13 @@ class Course(models.Model):
     preview = models.ImageField(upload_to='courses/', blank=True, null=True, verbose_name='Превью')
     description = models.TextField(blank=True, null=True, verbose_name='Описание')
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='courses', null=True)
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=10000.00, # Значение из миграции 0006 [cite: 30]
+        verbose_name='Цена курса'
+    )
+    # --------------------------------------------------
 
     # auto_now=True не подходит, т.к. нам нужно знать время *до* обновления
     last_updated_at = models.DateTimeField(default=timezone.now, verbose_name='Последнее обновление')

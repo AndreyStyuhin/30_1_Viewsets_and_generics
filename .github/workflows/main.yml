@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - 35_2_CI_CD_and_GitHub_Actions
+      - 35_2_CI_CD_and_GitHub_Actions1
 
 
 jobs:

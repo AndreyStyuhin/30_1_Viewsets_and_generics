@@ -18,6 +18,7 @@ router = DefaultRouter()
 router.register(r'profiles', UserViewSet, basename='user')
 
 urlpatterns = [
+
     # JWT Токены
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

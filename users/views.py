@@ -39,18 +39,14 @@ class UserViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def get_queryset(self):
-        """
-        Пользователи могут видеть/редактировать только свой профиль.
-        (Админ видит всех)
-        """
-        if self.request.user.is_superuser:
+        user = self.request.user
+
+        # ЛОГИЧЕСКОЕ ИСПРАВЛЕНИЕ: Если пользователь — модератор/админ, он видит всех.
+        if user.is_staff:
             return User.objects.all()
 
-        # --- ИСПРАВЛЕНИЕ (Warning 1): Проверка на AnonymousUser ---
-        if self.request.user.is_authenticated:
-            return User.objects.filter(pk=self.request.user.pk)
-        return User.objects.none()
-        # ---
+        # Иначе — только себя.
+        return User.objects.filter(pk=user.pk)
 
 
 class PaymentListAPIView(generics.ListAPIView):
