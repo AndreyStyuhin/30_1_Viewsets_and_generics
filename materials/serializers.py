@@ -32,7 +32,6 @@ class CourseSerializer(serializers.ModelSerializer):
     title = serializers.CharField(help_text="Название курса")
     description = serializers.CharField(help_text="Краткое описание курса")
     preview = serializers.ImageField(required=False, help_text="Превью/изображение курса")
-    price = serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Цена курса (в рублях)")
 
     class Meta:
         model = Course

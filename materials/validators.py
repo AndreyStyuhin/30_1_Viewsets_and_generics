@@ -18,5 +18,5 @@ class YouTubeURLValidator:
             url_validator(value)
         except ValidationError:
             raise ValidationError("Некорректная ссылка.")
-        if not re.match(r'^https?://(www\.)?(youtube\.com|youtu\.be)/', value):
+        if not re.match(r'^https?://(www\.)?(youtube\.com|youtu\.be)/.*', value):
             raise ValidationError("Разрешены только ссылки на YouTube.")

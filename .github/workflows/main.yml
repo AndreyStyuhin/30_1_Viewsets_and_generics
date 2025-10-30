@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - 35_2_CI_CD_and_GitHub_Actions
+      - 35_2_CI_CD_and_GitHub_Actions1
 
 
 jobs:
@@ -51,21 +51,28 @@ jobs:
         DB_PORT: 5432
       run: |
         python manage.py migrate
+        python manage.py makemigrations materials
         python manage.py test
 
   deploy:
     runs-on: ubuntu-latest
-    needs: test # Запускать только после успешного прохождения тестов
+    needs: test
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Login to Docker Hub
+    - name: Allow insecure Docker registry
+      run: |
+        echo '{ "insecure-registries":["212.22.70.98:5000"] }' | sudo tee /etc/docker/daemon.json
+        sudo systemctl restart docker
+
+    - name: Login to private Docker registry
       uses: docker/login-action@v2
       with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+        registry: 212.22.70.98:5000
+        username: ${{ secrets.REGISTRY_USER }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
 
     - name: Build and push Web image
       uses: docker/build-push-action@v4
@@ -73,7 +80,7 @@ jobs:
         context: .
         file: ./Dockerfile
         push: true
-        tags: ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:web
+        tags: 212.22.70.98:5000/myproject/web:latest
 
     - name: Build and push Nginx image
       uses: docker/build-push-action@v4
@@ -81,7 +88,8 @@ jobs:
         context: ./nginx
         file: ./nginx/Dockerfile
         push: true
-        tags: ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx
+        tags: 212.22.70.98:5000/myproject/nginx:latest
+
 
     - name: Deploy to server
       uses: appleboy/ssh-action@master
@@ -89,12 +97,11 @@ jobs:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        passphrase: ${{ secrets.SSH_PASSPHRASE }} # Если ваш ключ защищен паролем
-
         script: |
-          cd /home/${{ secrets.SERVER_USER }}/projects/ваш_проект # Укажите ваш путь
-          
-          # Создаем .env файл из секретов GitHub
+          cd /srv/myproject   # <-- исправленный путь
+          git pull origin main || true
+
+          # Создаем .env файл
           echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
           echo "DEBUG=False" >> .env
           echo "ALLOWED_HOSTS=${{ secrets.SERVER_HOST }},127.0.0.1,localhost" >> .env
@@ -103,25 +110,10 @@ jobs:
           echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
           echo "POSTGRES_HOST=db" >> .env
           echo "POSTGRES_PORT=5432" >> .env
-          
-          # Обновляем docker-compose.yml, чтобы он использовал ваши образы
-          # (Этот шаг можно пропустить, если в docker-compose.yml уже указаны переменные)
-          # Здесь мы предполагаем, что вы используете переменные DOCKER_USERNAME и DOCKER_REPO
-          # в вашем docker-compose.yml
-          export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-          export DOCKER_REPO=${{ secrets.DOCKER_REPO }}
-          
-          # Загружаем свежие образы
+
+          # Убедись, что пользователь имеет доступ к Docker
           docker-compose pull
-          
-          # Перезапускаем контейнеры с новыми образами
           docker-compose up -d --build
-          
-          # Выполняем миграции
           docker-compose exec web python manage.py migrate
-          
-          # Собираем статику
           docker-compose exec web python manage.py collectstatic --noinput
-          
-          # Очищаем старые образы (опционально)
           docker image prune -f

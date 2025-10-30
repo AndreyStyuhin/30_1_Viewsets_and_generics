@@ -154,7 +154,10 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
 }
 # --- STRIPE SETTINGS ---
-STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='your_default_stripe_key')
+STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='sk_test_51SK7Zz2ftJtH2COGEohuTvSm02S0yC0fLp4B6POzaZ7JMm6CgdFKveVOvXIlnHkwkQ8DafuXUBHlgQeFghCaU4lP00jcdtphBx')
+STRIPE_SUCCESS_URL = config('STRIPE_SUCCESS_URL', default='http://localhost:8000/api/users/payments/success/')
+STRIPE_CANCEL_URL = config('STRIPE_CANCEL_URL', default='http://localhost:8000/api/users/payments/cancel/')
+# ----------------------------------------------------
 
 REDIS_HOST = config('REDIS_HOST', default='localhost')
 REDIS_PORT = config('REDIS_PORT', default='6379')

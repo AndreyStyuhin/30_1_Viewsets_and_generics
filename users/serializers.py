@@ -4,11 +4,23 @@ from materials.models import Course, Lesson  # Нужны для PrimaryKeyRelat
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """(Задание 1) Сериализатор для профиля пользователя."""
-
     class Meta:
         model = User
-        fields = ('id', 'email', 'phone', 'city', 'avatar')
+        fields = (
+            'id',
+            'email',
+            'first_name',
+            'last_name',
+            'phone',
+            'city',
+            'avatar',
+            'password'
+        )
+        extra_kwargs = {
+            'password': {'write_only': True}
+        }
+        # Убедитесь, что здесь нет полей, которые вы пытаетесь обновить
+        # read_only_fields = ('is_active', )
 
 
 class PaymentSerializer(serializers.ModelSerializer):

@@ -161,6 +161,7 @@ class LessonAPITests(MaterialsAPITestCase):
         data = {
             'title': 'New Lesson',
             'course': self.course.pk,
+            'description': 'Test description',
             'video_url': 'https://www.youtube.com/watch?v=newvideo'
         }
         response = self.client.post(reverse('materials:lesson-list-create'), data, format='json')
@@ -173,6 +174,7 @@ class LessonAPITests(MaterialsAPITestCase):
         self.client.force_authenticate(self.user)
         url = reverse('materials:lesson-list-create')
         base_data = {'title': 'Validation Test Lesson', 'course': self.course.pk}
+        base_data['description'] = 'Test desc'  # Добавьте для избежания potential issues
 
         # Неверный URL (не YouTube)
         data_invalid_host = {**base_data, 'video_url': 'https://vimeo.com/123456'}

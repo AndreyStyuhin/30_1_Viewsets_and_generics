@@ -39,6 +39,9 @@ class IsOwner(BasePermission):
 class CourseViewSet(viewsets.ModelViewSet):
     serializer_class = CourseSerializer
     pagination_class = MaterialsPagination
+    # Атрибут queryset можно оставить для справки, но он будет переопределен.
+    # Для чистоты можно даже удалить его, если всегда используется get_queryset.
+    queryset = Course.objects.all().order_by('pk')
 
     def get_permissions(self):
         """
@@ -64,9 +67,13 @@ class CourseViewSet(viewsets.ModelViewSet):
         - Обычные пользователи видят только свои курсы.
         """
         user = self.request.user
+
+        # Модераторы видят все курсы (отсортировано)
         if user.groups.filter(name='moderators').exists():
-            return Course.objects.all()
-        return Course.objects.filter(owner=user)
+            return Course.objects.all().order_by('pk')
+
+        # Обычные пользователи видят только свои курсы (ОБЯЗАТЕЛЬНО ОТСОРТИРОВАНО)
+        return Course.objects.filter(owner=user).order_by('pk')  # <--- ИСПРАВЛЕНИЕ ЗДЕСЬ
 
     def perform_create(self, serializer):
         """Присваиваем владельца при создании."""
